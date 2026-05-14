@@ -36,6 +36,10 @@ dependencies = [
 
     # Optional but useful for Haystack embedding/document handling
     "numpy>=1.26.4",
+
+    # Testing dependencies  
+    "pytest>=7.4.0",
+    "anyio[test]>=4.0.0",
 ]
 
 [tool.setuptools.packages.find]

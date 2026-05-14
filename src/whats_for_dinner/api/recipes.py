@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from whats_for_dinner.core.database import get_session
 from whats_for_dinner.domain.schemas import RecommendRecipeRequest
 from whats_for_dinner.domain.schemas import RecommendRecipeResponse
-from whats_for_dinner.services.image_service import ImageService
+from whats_for_dinner.custom_components import ExtractFoodItemsFromImage
 from whats_for_dinner.services.recipe_service import RecipeService
 
 router = APIRouter()
@@ -60,8 +60,10 @@ async def recommend_recipe_with_image(
         if not image.content_type or not image.content_type.startswith('image/'):
             raise ValueError("Uploaded file must be an image")
             
-        image_service = ImageService()
-        extracted_ingredients = await image_service.extract_ingredients_from_image(image)
+        # Use Haystack custom component
+        extractor = ExtractFoodItemsFromImage()
+        result = await extractor.run(image_file=image)
+        extracted_ingredients = result["answer"]
 
     recipe = await recipe_service.recommend_recipe(
         ingredients=ingredients,

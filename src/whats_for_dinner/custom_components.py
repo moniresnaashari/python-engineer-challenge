@@ -1,30 +1,62 @@
 from haystack import component
 from PIL import Image
 
-import openai
 import base64
 import io
+import tempfile
+from pathlib import Path
+
+from fastapi import UploadFile
+from openai import AsyncOpenAI
+
+from whats_for_dinner.core.config import settings
 
 @component()
 class ExtractFoodItemsFromImage:
     """Extracts food ingredients visible in a given image"""
+    
+    def __init__(self):
+        self.client = AsyncOpenAI(api_key=settings.openai_api_key)
 
     @component.output_types(answer=str)
-    def run(
+    async def run(
         self,
-        image_path: str,
-    ) -> str:
-        model = "gpt-4o"
+        image_path: str | None = None,
+        image_file: UploadFile | None = None,
+    ) -> dict[str, str]:
+        """Extract ingredients from image path or uploaded file."""
+        
+        if image_file is not None:
+            # Handle uploaded file
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_file:
+                content = await image_file.read()
+                temp_file.write(content)
+                temp_file_path = temp_file.name
+            
+            try:
+                image_base64 = self.image_to_base64(temp_file_path)
+                result = await self._extract_ingredients(image_base64)
+                return {"answer": result}
+            finally:
+                Path(temp_file_path).unlink(missing_ok=True)
+                
+        elif image_path is not None:
+            # Handle file path
+            image_base64 = self.image_to_base64(image_path)
+            result = await self._extract_ingredients(image_base64)
+            return {"answer": result}
+        else:
+            raise ValueError("Either image_path or image_file must be provided")
 
-        image_base64 = self.image_to_base64(image_path)
-
+    async def _extract_ingredients(self, image_base64: str) -> str:
+        """Extract ingredients using OpenAI Vision API."""
         messages = [
             {
                 "role": "user",
                 "content": [
                     {
-                      "type": "text",
-                      "text": "List the visible ingredients as a bullet list."
+                        "type": "text",
+                        "text": "List the visible food ingredients as a bullet list. Be specific about the types of ingredients you can identify."
                     },
                     {
                         "type": "image_url",
@@ -37,14 +69,17 @@ class ExtractFoodItemsFromImage:
             },
         ]
 
-        client = openai
-
-        response = client.chat.completions.create(model=model, messages=messages, stream=False)
+        response = await self.client.chat.completions.create(
+            model="gpt-4o", 
+            messages=messages, 
+            stream=False
+        )
         content = response.choices[0].message.content
-
-        return {
-            "answer": content,
-        }
+        
+        if content is None:
+            raise ValueError("OpenAI returned empty response for image analysis")
+            
+        return content
 
     def image_to_base64(self, image_path: str) -> str:
         """
