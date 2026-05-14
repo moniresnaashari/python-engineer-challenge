@@ -53,9 +53,6 @@ class RecipeService:
         extracted_ingredients: str | None,
     ) -> str:
         """Combine text ingredients with extracted ingredients from image."""
-        if not extracted_ingredients:
-            return text_ingredients
-            
         if not text_ingredients.strip():
             return extracted_ingredients
             

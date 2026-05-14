@@ -62,29 +62,33 @@ class TestRecipeAPI:
     @pytest.mark.anyio
     async def test_recommend_recipe_success(self, client, mock_recipe_service):
         """Test successful recipe recommendation with text ingredients."""
-        request_data = {"ingredients": "chicken, rice, vegetables"}
+        data = {"ingredients": "chicken, rice, vegetables"}
         
-        response = client.post("/recommend_recipe", json=request_data)
+        response = client.post("/recommend_recipe", data=data)
         
         assert response.status_code == 200
-        data = response.json()
-        assert "recipe" in data
-        assert isinstance(data["recipe"], str)
+        response_data = response.json()
+        assert "recipe" in response_data
+        assert isinstance(response_data["recipe"], str)
         
         # Verify the service was called correctly
         mock_recipe_service.recommend_recipe.assert_called_once_with(
-            ingredients="chicken, rice, vegetables"
+            ingredients="chicken, rice, vegetables",
+            extracted_ingredients=None
         )
 
     @pytest.mark.anyio
     async def test_recommend_recipe_empty_ingredients(self, client, mock_recipe_service):
         """Test recipe recommendation with empty ingredients."""
-        request_data = {"ingredients": ""}
+        data = {"ingredients": ""}
         
-        response = client.post("/recommend_recipe", json=request_data)
+        response = client.post("/recommend_recipe", data=data)
         
         assert response.status_code == 200
-        mock_recipe_service.recommend_recipe.assert_called_once_with(ingredients="")
+        mock_recipe_service.recommend_recipe.assert_called_once_with(
+            ingredients="", 
+            extracted_ingredients=None
+        )
 
 
     @pytest.mark.anyio
@@ -99,7 +103,7 @@ class TestRecipeAPI:
         files = {"image": ("test.jpg", test_image, "image/jpeg")}
         data = {"ingredients": "chicken, rice"}
         
-        response = client.post("/recommend_recipe_with_image", files=files, data=data)
+        response = client.post("/recommend_recipe", files=files, data=data)
         
         assert response.status_code == 200
         response_data = response.json()
@@ -111,11 +115,11 @@ class TestRecipeAPI:
         mock_recipe_service.recommend_recipe.assert_called_once()
 
     @pytest.mark.anyio
-    async def test_recommend_recipe_text_only(self, client, mock_recipe_service):
+    async def test_recommend_recipe_form_text_only(self, client, mock_recipe_service):
         """Test recipe recommendation with text only (no image)."""
         data = {"ingredients": "chicken, rice, vegetables"}
         
-        response = client.post("/recommend_recipe_with_image", data=data)
+        response = client.post("/recommend_recipe", data=data)
         
         assert response.status_code == 200
         response_data = response.json()
@@ -130,20 +134,16 @@ class TestRecipeAPI:
     @pytest.mark.anyio
     async def test_recommend_recipe_missing_ingredients_field(self, client):
         """Test recipe recommendation without ingredients field."""
-        request_data = {}
+        data = {}
         
-        response = client.post("/recommend_recipe", json=request_data)
+        response = client.post("/recommend_recipe", data=data)
         assert response.status_code == 422
 
     @pytest.mark.anyio
-    async def test_recommend_recipe_invalid_json(self, client):
-        """Test recipe recommendation with invalid JSON."""
-        response = client.post(
-            "/recommend_recipe", 
-            data="invalid json",
-            headers={"Content-Type": "application/json"}
-        )
-        
+    async def test_recommend_recipe_invalid_form_data(self, client):
+        """Test recipe recommendation with invalid form data."""
+        # Test with no data at all
+        response = client.post("/recommend_recipe")
         assert response.status_code == 422
 
     @pytest.mark.anyio
@@ -154,10 +154,10 @@ class TestRecipeAPI:
             mock_service.return_value = service_instance
             service_instance.recommend_recipe.side_effect = Exception("Service error")
             
-            request_data = {"ingredients": "chicken, rice"}
+            data = {"ingredients": "chicken, rice"}
             # The actual exception should be raised rather than caught
             with pytest.raises(Exception):
-                response = client.post("/recommend_recipe", json=request_data)
+                response = client.post("/recommend_recipe", data=data)
 
     @pytest.mark.anyio
     async def test_recommend_recipe_image_only(
@@ -171,7 +171,7 @@ class TestRecipeAPI:
         files = {"image": ("test.jpg", test_image, "image/jpeg")}
         data = {"ingredients": ""}
         
-        response = client.post("/recommend_recipe_with_image", files=files, data=data)
+        response = client.post("/recommend_recipe", files=files, data=data)
         
         assert response.status_code == 200
         
@@ -187,16 +187,17 @@ class TestRecipeAPI:
         files = {"image": ("test.txt", io.BytesIO(b"not an image"), "text/plain")}
         data = {"ingredients": "chicken, rice"}
         
-        # Should raise an exception due to invalid image type
-        with pytest.raises(Exception):
-            response = client.post("/recommend_recipe_with_image", files=files, data=data)
+        # Should return HTTP 400 due to invalid image type
+        response = client.post("/recommend_recipe", files=files, data=data)
+        assert response.status_code == 400
+        assert "Uploaded file must be an image" in response.json()["detail"]
 
     @pytest.mark.anyio
     async def test_recommend_recipe_missing_ingredients_field_with_image(self, client, test_image):
         """Test recipe recommendation without ingredients field with image."""
         files = {"image": ("test.jpg", test_image, "image/jpeg")}
         
-        response = client.post("/recommend_recipe_with_image", files=files)
+        response = client.post("/recommend_recipe", files=files)
         
         assert response.status_code == 422
 
@@ -218,7 +219,7 @@ class TestRecipeAPI:
             
             # Should raise an exception when image processing fails
             with pytest.raises(Exception):
-                response = client.post("/recommend_recipe_with_image", files=files, data=data)
+                response = client.post("/recommend_recipe", files=files, data=data)
 
     @pytest.mark.anyio
     async def test_recommend_recipe_large_image(
@@ -237,13 +238,13 @@ class TestRecipeAPI:
         files = {"image": ("large_test.jpg", buffer, "image/jpeg")}
         data = {"ingredients": "tomatoes, basil"}
         
-        response = client.post("/recommend_recipe_with_image", files=files, data=data)
+        response = client.post("/recommend_recipe", files=files, data=data)
         
         assert response.status_code == 200
         mock_image_extractor.run.assert_called_once()
 
     @pytest.mark.anyio
-    async def test_recommend_recipe_special_characters_ingredients(
+    async def test_recommend_recipe_form_special_characters_ingredients(
         self, 
         client, 
         mock_recipe_service
@@ -251,7 +252,7 @@ class TestRecipeAPI:
         """Test recipe recommendation with special characters in ingredients."""
         data = {"ingredients": "jalapenos, pinon nuts, cafe au lait"}
         
-        response = client.post("/recommend_recipe_with_image", data=data)
+        response = client.post("/recommend_recipe", data=data)
         
         assert response.status_code == 200
         mock_recipe_service.recommend_recipe.assert_called_once_with(
@@ -275,7 +276,7 @@ class TestRecipeAPI:
         files = {"image": ("test.png", buffer, "image/png")}
         data = {"ingredients": "blueberries, flour"}
         
-        response = client.post("/recommend_recipe_with_image", files=files, data=data)
+        response = client.post("/recommend_recipe", files=files, data=data)
         
         assert response.status_code == 200
         mock_image_extractor.run.assert_called_once()
@@ -289,8 +290,9 @@ class TestRecipeAPI:
         openapi_data = response.json()
         assert "paths" in openapi_data
         assert "/recommend_recipe" in openapi_data["paths"]
-        assert "/recommend_recipe_with_image" in openapi_data["paths"]
         
-        # Verify both endpoints are POST methods
+        # Verify endpoint is POST method
         assert "post" in openapi_data["paths"]["/recommend_recipe"]
-        assert "post" in openapi_data["paths"]["/recommend_recipe_with_image"]
+        
+        # Verify only one endpoint exists
+        assert len([path for path in openapi_data["paths"] if path.startswith("/recommend_recipe")]) == 1
