@@ -1,5 +1,3 @@
-from pgvector.sqlalchemy import Vector
-from sqlalchemy import Column
 from sqlmodel import Field
 from sqlmodel import SQLModel
 
@@ -12,7 +10,3 @@ class Recipe(SQLModel, table=True):
     title: str
     ingredients: str
     instructions: str
-
-    embedding: list[float] = Field(
-        sa_column=Column(Vector(1536)),
-    )

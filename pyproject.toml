@@ -36,6 +36,9 @@ dependencies = [
 
     # Optional but useful for Haystack embedding/document handling
     "numpy>=1.26.4",
+    
+    # Haystack pgvector integration
+    "pgvector-haystack>=0.9.0",
 
     # Testing dependencies  
     "pytest>=7.4.0",

@@ -3,11 +3,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from whats_for_dinner.repositories.recipe_repository import (
     RecipeRepository,
 )
-from whats_for_dinner.services.embedding_service import (
-    create_embedding,
-)
-from whats_for_dinner.services.llm_service import (
-    LLMService,
+from whats_for_dinner.pipelines.rag_pipeline import get_rag_pipeline
+from whats_for_dinner.domain.exceptions import (
+    RecipeGenerationError,
+    RecipeNotFoundError,
 )
 
 
@@ -19,33 +18,33 @@ class RecipeService:
         session: AsyncSession,
     ) -> None:
         self.repository = RecipeRepository(session)
-        self.llm_service = LLMService()
+        self.rag_pipeline = get_rag_pipeline()
 
     async def recommend_recipe(
         self,
         ingredients: str,
         extracted_ingredients: str | None = None,
     ) -> str:
+        if not ingredients.strip() and not extracted_ingredients:
+            raise RecipeGenerationError("No ingredients provided")
+            
         # Combine text ingredients with extracted ingredients from image
         combined_ingredients = self._combine_ingredients(
             ingredients, 
             extracted_ingredients
         )
         
-        embedding = await create_embedding(
-            combined_ingredients,
-        )
-
-        similar_recipes = (
-            await self.repository.find_similar_recipes(
-                embedding=embedding,
-            )
-        )
-
-        return await self.llm_service.generate_recipe(
-            ingredients=combined_ingredients,
-            similar_recipes=similar_recipes,
-        )
+        # Ensure pipeline has recipes loaded
+        await self._ensure_recipes_loaded()
+        
+        try:
+            # Use Haystack pipeline for RAG
+            result = await self.rag_pipeline.recommend_recipe(combined_ingredients)
+            if not result or not result.strip():
+                raise RecipeGenerationError("Failed to generate recipe recommendation")
+            return result
+        except Exception as e:
+            raise RecipeGenerationError(f"Recipe generation failed: {str(e)}") from e
     
     def _combine_ingredients(
         self,
@@ -57,3 +56,12 @@ class RecipeService:
             return extracted_ingredients
             
         return f"{text_ingredients}\n\nAdditionally found in image:\n{extracted_ingredients}"
+    
+    async def _ensure_recipes_loaded(self) -> None:
+        """Ensure recipes are loaded in the RAG pipeline."""
+        if not self.rag_pipeline._recipes_loaded:
+            # Get all recipes from database
+            all_recipes = await self.repository.get_all_recipes()
+            if not all_recipes:
+                raise RecipeNotFoundError("No recipes found in database")
+            await self.rag_pipeline.load_recipes(all_recipes)

@@ -1,6 +1,5 @@
 from collections.abc import AsyncGenerator
 
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -27,9 +26,4 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
 
 async def create_database() -> None:
     async with engine.begin() as connection:
-        # pgvector extension must exist before table creation
-        await connection.execute(
-            text("CREATE EXTENSION IF NOT EXISTS vector")
-        )
-
         await connection.run_sync(SQLModel.metadata.create_all)

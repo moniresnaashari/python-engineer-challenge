@@ -1,11 +1,8 @@
-from sqlalchemy import bindparam
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql import text
-from sqlalchemy.types import Float
 
 from whats_for_dinner.models.recipe import Recipe
+from whats_for_dinner.domain.exceptions import RecipeNotFoundError
 
 
 class RecipeRepository:
@@ -33,51 +30,20 @@ class RecipeRepository:
 
         return result.first() is not None
 
-    async def find_similar_recipes(
-        self,
-        embedding: list[float],
-        limit: int = 3,
-    ) -> list[Recipe]:
-        statement = (
-            text("""
-                SELECT
-                    id,
-                    title,
-                    ingredients,
-                    instructions
-                FROM recipes
-                ORDER BY embedding <=> CAST(:embedding AS vector)
-                LIMIT :limit
-            """)
-            .bindparams(
-                bindparam(
-                    "embedding",
-                    type_=ARRAY(Float),
-                ),
+    
+    async def get_all_recipes(self) -> list[Recipe]:
+        """Get all recipes from the database."""
+        try:
+            result = await self.session.execute(
+                select(Recipe)
             )
-        )
-
-        result = await self.session.execute(
-            statement,
-            {
-                "embedding": embedding,
-                "limit": limit,
-            },
-        )
-
-        rows = result.mappings().all()
-
-        recipes: list[Recipe] = []
-
-        for row in rows:
-            recipes.append(
-                Recipe(
-                    id=row["id"],
-                    title=row["title"],
-                    ingredients=row["ingredients"],
-                    instructions=row["instructions"],
-                    embedding=[],
-                )
-            )
-
-        return recipes
+            
+            recipes = list(result.scalars().all())
+            if not recipes:
+                raise RecipeNotFoundError("No recipes found in database")
+            
+            return recipes
+        except Exception as e:
+            if isinstance(e, RecipeNotFoundError):
+                raise
+            raise RecipeNotFoundError(f"Failed to retrieve recipes: {str(e)}") from e

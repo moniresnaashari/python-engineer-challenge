@@ -7,9 +7,6 @@ from whats_for_dinner.models.recipe import Recipe
 from whats_for_dinner.repositories.recipe_repository import (
     RecipeRepository,
 )
-from whats_for_dinner.services.embedding_service import (
-    create_embedding,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -76,20 +73,10 @@ class IngestionService:
             content,
         )
 
-        searchable_text = self._build_searchable_text(
-            title=title,
-            ingredients=ingredients,
-        )
-
-        embedding = await create_embedding(
-            searchable_text,
-        )
-
         return Recipe(
             title=title,
             ingredients=ingredients,
             instructions=instructions,
-            embedding=embedding,
         )
 
     def _extract_recipe_sections(
@@ -136,15 +123,3 @@ class IngestionService:
             instructions,
         )
 
-    def _build_searchable_text(
-        self,
-        title: str,
-        ingredients: str,
-    ) -> str:
-        return f"""
-Title:
-{title}
-
-Ingredients:
-{ingredients}
-"""
