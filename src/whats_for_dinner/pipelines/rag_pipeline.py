@@ -131,6 +131,10 @@ Requirements:
         self.document_store.write_documents(embedded_docs["documents"])
         self._recipes_loaded = True
     
+    def are_recipes_loaded(self) -> bool:
+        """Check if recipes are loaded in the pipeline."""
+        return self._recipes_loaded or self.document_store.count_documents() > 0
+
     async def recommend_recipe(self, ingredients: str) -> str:
         """Generate recipe recommendation using the RAG pipeline."""
         

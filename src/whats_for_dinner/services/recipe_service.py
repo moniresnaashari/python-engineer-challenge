@@ -59,7 +59,7 @@ class RecipeService:
     
     async def _ensure_recipes_loaded(self) -> None:
         """Ensure recipes are loaded in the RAG pipeline."""
-        if not self.rag_pipeline._recipes_loaded:
+        if not self.rag_pipeline.are_recipes_loaded():
             # Get all recipes from database
             all_recipes = await self.repository.get_all_recipes()
             if not all_recipes:
