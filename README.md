@@ -27,7 +27,7 @@ This project implements a GenAI-powered recipe recommendation API using FastAPI,
    Create a `.env` file in the project root:
    ```env
    OPENAI_API_KEY=your_openai_api_key_here
-   DATABASE_URL=postgresql+asyncpg://pipeline:pipeline-pass@localhost:5432/challenge
+   DATABASE_URL=postgresql+psycopg://pipeline:pipeline-pass@localhost:5432/challenge
    ```
 
 4. **Start the application:**
@@ -105,15 +105,13 @@ OpenAI GPT-4o (Embeddings & Generation)
 **Request:**
 ```bash
 curl -X POST "http://localhost:8000/recommend_recipe" \
-     -H "Content-Type: application/json" \
-     -d '{"ingredients": "chicken, rice, vegetables"}'
+     -F "ingredients=chicken, rice, vegetables"
 ```
 
 **Response:**
 ```json
 {
-  "recipe": "# Chicken and Vegetable Rice Bowl\n\n## Ingredients\n- 2 chicken breasts...",
-  "source_recipes": ["Chicken Fried Rice", "Vegetable Stir Fry", "Rice Pilaf"]
+  "recipe": "# Chicken and Vegetable Rice Bowl\n\n## Ingredients\n- 2 chicken breasts..."
 }
 ```
 
@@ -122,11 +120,8 @@ curl -X POST "http://localhost:8000/recommend_recipe" \
 **Request:**
 ```bash
 curl -X POST "http://localhost:8000/recommend_recipe" \
-     -H "Content-Type: application/json" \
-     -d '{
-       "ingredients": "tomatoes, basil, cheese",
-       "image": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQ..."
-     }'
+     -F "ingredients=tomatoes, basil, cheese" \
+     -F "image=@path/to/your/image.jpg"
 ```
 
 ### Health Check
